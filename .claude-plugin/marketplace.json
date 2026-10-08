@@ -1,0 +1,13 @@
+{
+  "name": "unstuck",
+  "owner": {
+    "name": "unstuck"
+  },
+  "plugins": [
+    {
+      "name": "unstuck",
+      "source": "./unstuck"
+    }
+  ],
+  "description": "unstuck: notices when Claude Code goes in circles and gets you out."
+}

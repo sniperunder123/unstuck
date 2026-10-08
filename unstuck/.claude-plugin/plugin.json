@@ -1,0 +1,7 @@
+{
+  "name": "unstuck",
+  "version": "0.2.0",
+  "description": "Detects when Claude Code is going in circles, tells you clearly, and gets you out.",
+  "types": "./types/index.d.ts",
+  "license": "MIT"
+}

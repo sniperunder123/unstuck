@@ -1,0 +1,7 @@
+{
+  "name": "unstuck-demo",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
