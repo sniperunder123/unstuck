@@ -12,7 +12,9 @@ import {
   hackNote,
   hacksAdded,
   HANDOFF_PROMPT,
+  freshDeadEnds,
   isGreen,
+  looksFailed,
   isIdle,
   isPingPong,
   levelOf,
@@ -158,10 +160,9 @@ const handoff = async ($: $) => {
 const rememberDeadEnd = async ($: $, note: string) => {
   if (!(await read($, settings)).deadEnds) return
 
-  const date = new Date(await $.clock.now()).toISOString().slice(0, 10)
-  // ponytail: keep the last 5 entries, enough to steer without bloating the prompt
-  const entries = [...deadEnds.split(/\n(?=## )/).filter(x => x.startsWith('## ')), `## ${date}\n\n${note}\n`].slice(-5)
-  deadEnds = entries.join('\n')
+  const now = await $.clock.now()
+  const date = new Date(now).toISOString().slice(0, 10)
+  deadEnds = freshDeadEnds(`${deadEnds}\n## ${date}\n\n${note}\n`, now)
   await $.store.set(await deadEndsKey($), deadEnds).catch(() => undefined)
 }
 
@@ -293,11 +294,11 @@ export const register: Register = on => {
     // A tracker from an older version lacks today's counters: start clean.
     await update($, tracker, t => (t && Object.keys(EMPTY).every(k => k in t) ? t : EMPTY))
     showStatus($, await read($, tracker), s)
-    deadEnds = String((await $.store.get(await deadEndsKey($))) ?? '')
+    deadEnds = freshDeadEnds(String((await $.store.get(await deadEndsKey($))) ?? ''), await $.clock.now())
     await $.command.register({
       name: 'unstuck',
       description: 'Ways out when Claude is going in circles',
-      argumentHint: '[settings|reset]',
+      argumentHint: '[settings|reset|dead-ends|forget]',
     })
 
     return next(e)
@@ -313,6 +314,14 @@ export const register: Register = on => {
     if (arg === 'reset') {
       await setTracker($, EMPTY, true)
       return { text: 'unstuck: tracker reset.' }
+    }
+    if (arg === 'dead-ends') {
+      return { text: deadEnds.trim() || 'unstuck: no dead ends recorded for this project.' }
+    }
+    if (arg === 'forget') {
+      deadEnds = ''
+      await $.store.delete(await deadEndsKey($))
+      return { text: 'unstuck: dead ends for this project forgotten.' }
     }
 
     await $.ui.open({ id: MENU, title: 'unstuck', focus: true })
@@ -341,7 +350,8 @@ export const register: Register = on => {
 
     const before = await read($, tracker)
 
-    if (ran.isError) {
+    // `npm test | tail` exits 0 when the tests fail: trust the runner's output over the exit code.
+    if (ran.isError || looksFailed(e.command, ran.text ?? '')) {
       const t = onError(before, ran.text ?? '', e.command, await $.clock.now(), await usd($))
       const s = await read($, settings)
       const shouldNudge = s.nudge && levelOf(t, s) === 'red' && !t.nudged

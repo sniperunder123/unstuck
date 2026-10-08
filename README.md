@@ -45,7 +45,8 @@ Each signal raises a score. 🟡 means Claude *may* be looping, 🔴 means it is
 ![The /unstuck pane with a second opinion](docs/menu.png)
 
 - **Remembers dead ends.** Every clean restart and second opinion saves what failed in the mod's private storage, outside your project (nothing to commit by mistake).
-  The next sessions in that project are told not to retry it.
+  The next sessions in that project are told not to retry it. Notes expire after 14 days (5 at most):
+  `/unstuck dead-ends` shows them, `/unstuck forget` clears them.
 
 ## Install
 
@@ -66,6 +67,8 @@ You don't have to do anything: unstuck stays silent until Claude starts looping.
 | `/unstuck` | Opens the pane: what is going on, the second opinion, every way out |
 | `/unstuck settings` | Opens the settings |
 | `/unstuck reset` | Forgets the current loop |
+| `/unstuck dead-ends` | Shows the dead ends remembered for this project |
+| `/unstuck forget` | Clears them |
 
 In the band or the pane, press <kbd>Ctrl</kbd>+<kbd>X</kbd> <kbd>Tab</kbd> to focus it, then: <kbd>r</kbd> revert,
 <kbd>c</kbd> clean restart, <kbd>o</kbd> second opinion, <kbd>u</kbd> use the second opinion, <kbd>d</kbd> diagnose,
@@ -81,8 +84,10 @@ Settings are saved across sessions.
 ## Good to know
 
 - **Revert** needs a git repository and a passing test or build during the session (`npm test`, `pytest`, `cargo test`, `go test`, `tsc`, …).
-  It only puts back files git tracks. Files created since stay where they are, and your untracked files are never touched.
-  A test run that passes because a test was skipped does not count as green.
+  Only real runner invocations count: `ls tests/` or `mkdir build` do not. A piped run (`npm test | tail`) is judged on its output,
+  not its exit code, and a run that passes because a test was skipped does not count as green.
+  Revert puts back every file git tracks, **your own changes since that point included**: it gives you the command to undo it.
+  Files created since stay where they are, and untracked files are never touched.
 - **Errors are read from shell commands** (tests, builds, scripts). An error inside a file edit is not counted yet.
 - **Clean restart really clears the conversation.** The handoff note is in your prompt: read it, then press Enter.
 - Tested on Windows so far. macOS and Linux should work but have not been tried yet: reports welcome.
@@ -92,7 +97,7 @@ Settings are saved across sessions.
 
 ```
 claude --plugin-dir ./unstuck      # load it from this folder
-claude plugin test ./unstuck       # 16 tests: detection logic + the band and panes on terminal and desktop
+claude plugin test ./unstuck       # 19 tests: detection logic + the band and panes on terminal and desktop
 claude plugin validate ./unstuck
 ```
 

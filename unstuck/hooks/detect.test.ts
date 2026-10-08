@@ -6,7 +6,10 @@ import {
   DEFAULTS,
   EMPTY,
   hacksAdded,
+  freshDeadEnds,
   isGreen,
+  isHealthCheck,
+  looksFailed,
   isPingPong,
   levelOf,
   normalize,
@@ -103,6 +106,49 @@ test('tests passing after a silenced error do not end the loop nor count as gree
   expect(onSuccess(t, 'npm test')).toBe(t)
   expect(isGreen(t, 'npm test')).toBe(false)
   expect(isGreen(EMPTY, 'npm test')).toBe(true)
+})
+
+test('only real test/build runs count as health checks, not the word "test"', () => {
+  for (const cmd of [
+    'npm test',
+    'cd demo && npm test',
+    'npm run build',
+    'npx vitest run',
+    'pytest -x',
+    'python -m pytest tests/',
+    'cargo test',
+    'go test ./...',
+    'npm test 2>&1 | tail -20',
+    'node --test',
+  ]) {
+    expect([cmd, isHealthCheck(cmd)]).toEqual([cmd, true])
+  }
+  for (const cmd of ['ls tests/', 'cat build.gradle', 'mkdir build', 'git commit -m "add test"', 'echo test', 'rm -rf build']) {
+    expect([cmd, isHealthCheck(cmd)]).toEqual([cmd, false])
+  }
+})
+
+test('a piped test run that fails is a failure, whatever the exit code', () => {
+  expect(looksFailed('npm test 2>&1 | tail -20', '✖ failing tests:\n✖ discount (2ms)')).toBe(true)
+  expect(looksFailed('pytest | tail', '==== 1 failed, 2 passed in 0.3s ====')).toBe(true)
+  expect(looksFailed('npx jest | tail', 'Tests:       1 failed, 4 passed, 5 total')).toBe(true)
+  expect(looksFailed('npm test | tail', 'ℹ tests 3\nℹ pass 3\nℹ fail 0')).toBe(false)
+  expect(looksFailed('pytest | tail', '==== 3 passed, 0 failed ====')).toBe(false)
+  expect(looksFailed('cat ci.log', 'FAIL src/a.test.js')).toBe(false)
+})
+
+test('dead ends keep the last 5 and expire after 14 days', () => {
+  const day = 86_400_000
+  const now = Date.parse('2026-10-20')
+  const entry = (date: string) => `## ${date}\n\nnote ${date}`
+  const notes = ['2026-09-01', '2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15']
+    .map(entry)
+    .join('\n')
+  const kept = freshDeadEnds(notes, now)
+  expect(kept).not.toContain('2026-09-01')
+  expect(kept).not.toContain('2026-10-10')
+  expect(kept.match(/^## /gm)?.length).toBe(5)
+  expect(freshDeadEnds(entry('2026-10-01'), now + 0 * day)).toBe('')
 })
 
 test('detectors off stay green', () => {

@@ -199,9 +199,37 @@ export const reasonsOf = (t: Tracker, s: Settings) =>
 
 export const burnedOf = (t: Tracker) => Math.max(0, t.usd - t.usdAtStart)
 
-const HEALTH_CHECK = /\b(test|tests|build|tsc|lint|pytest|jest|vitest|mocha|cargo (test|build|check)|go (test|build|vet))\b/
+const DEAD_END_DAYS = 14
 
-export const isHealthCheck = (command: string) => HEALTH_CHECK.test(command)
+/**
+ * The dead-end notes still worth reading: the last 5, none older than 14 days.
+ * An old bug is usually fixed, and "do not retry X" would then mislead.
+ */
+export const freshDeadEnds = (text: string, now: number) =>
+  text
+    .split(/\n(?=## )/)
+    .map(entry => entry.trim())
+    .filter(entry => {
+      const date = /^## (\d{4}-\d\d-\d\d)/.exec(entry)?.[1]
+      return date !== undefined && now - Date.parse(date) <= DEAD_END_DAYS * 86_400_000
+    })
+    .slice(-5)
+    .join('\n\n')
+
+/** A test, build or type-check runner, at the start of a step (not the word "test" anywhere: `ls tests/` is no test run). */
+const RUNNER =
+  /^(?:(?:npx|pnpm|yarn|bun|npm)\s+(?:run\s+)?(?:test|build|lint|typecheck|check)\b|npm\s+t\b|(?:npx\s+|pnpm\s+(?:exec\s+)?)?(?:tsc|vitest|jest|mocha|eslint)\b|(?:python3?\s+-m\s+)?pytest\b|cargo\s+(?:test|build|check|clippy)\b|go\s+(?:test|build|vet)\b|make\s+(?:test|build|check)\b|dotnet\s+(?:test|build)\b|mvn\s+(?:\S+\s+)*(?:test|verify|package)\b|\.?\/?gradlew?\s+(?:test|build|check)\b|node\s+--test\b|deno\s+test\b)/
+
+/** Each step of a command line, without what it is piped into: `cd x && npm test | tail` -> `cd x`, `npm test`. */
+const steps = (command: string) => command.split(/&&|\|\||;/).map(step => step.split('|')[0]!.trim())
+
+export const isHealthCheck = (command: string) => steps(command).some(step => RUNNER.test(step))
+
+/** A runner's output that says it failed, for when the exit code lies (`npm test | tail`, `|| true`). */
+const FAILED_OUTPUT =
+  /\b[1-9]\d* (?:failed|failing|errors?)\b|^\s*(?:✖|✗|FAIL(?:ED)?\b|not ok\b|--- FAIL)|npm ERR!|\berror TS\d+|Traceback \(most recent call last\)|^\s*Tests?:\s+[1-9]\d* failed/im
+
+export const looksFailed = (command: string, output: string) => isHealthCheck(command) && FAILED_OUTPUT.test(output)
 
 export const nudgeFor = (t: Tracker, s: Settings) =>
   `[unstuck] You are going in circles (${reasonsOf(t, s).join(', ')}). Stop editing. Before any change:\n` +
