@@ -33,6 +33,39 @@ test('same error with moved line numbers counts as a repeat, and escalates', () 
   expect(t.excerpt).toBe("TypeError: Cannot read properties of undefined (reading 'map')")
 })
 
+const TYPE_ERROR = "TypeError: Cannot read properties of undefined (reading 'map')"
+
+test('two different tests with the same error message are two failures, not a repeat', () => {
+  const cart = `✖ cart total (1.2ms)\n${TYPE_ERROR}\n    at total (/home/u/shop/cart.js:5:3)`
+  const users = `✖ user list (0.8ms)\n${TYPE_ERROR}\n    at list (/home/u/shop/users.js:9:1)`
+  expect(normalize(cart)).not.toBe(normalize(users))
+
+  const t = fail(fail(EMPTY, cart), users)
+  expect(t.repeats).toBe(1)
+  expect(levelOf(t, { ...DEFAULTS, detectCommand: false })).toBe('green')
+})
+
+test('the same error thrown from two different files is two failures', () => {
+  const a = `${TYPE_ERROR}\n    at C:\\shop\\src\\cart.js:5:3`
+  const b = `${TYPE_ERROR}\n    at C:\\shop\\src\\users.js:5:3`
+  expect(normalize(a)).not.toBe(normalize(b))
+})
+
+test('a changing actual value is progress, not a repeat', () => {
+  const run = (actual: string) => `✖ discount (3.1ms)\nAssertionError: Expected values to be strictly equal: actual: ${actual}, expected: 53.97`
+  expect(normalize(run('53.973'))).not.toBe(normalize(run('54.1')))
+})
+
+test('the same failure stays the same across durations, machines and moved lines', () => {
+  const run = (ms: string, root: string, line: number) =>
+    `✖ discount (${ms}ms)\nAssertionError: actual: 53.973, expected: 53.97\n    at ${root}/shop/cart.test.js:${line}:3`
+  expect(normalize(run('10.4', '/home/alice', 9))).toBe(normalize(run('1.2', 'C:\\Users\\bob', 14)))
+})
+
+test('fractions and versions are values, not paths', () => {
+  expect(normalize('Error: 1/4 tests passed')).not.toBe(normalize('Error: 3/4 tests passed'))
+})
+
 test('a different error on another command starts over', () => {
   const t = fail(fail(), 'SyntaxError: Unexpected token', 'node build.js')
   expect(t.repeats).toBe(1)

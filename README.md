@@ -15,7 +15,7 @@ watches for these loops while they happen, tells you in plain words, and gives y
 
 | Signal | What it means |
 | --- | --- |
-| **Same error** | The same error keeps coming back. Line numbers, paths and addresses are ignored, so a "new" error that is really the old one still counts. |
+| **Same error** | The same error keeps coming back. Line numbers, folders, addresses and durations are ignored, so a "new" error that is really the old one still counts. The failing test, the file and the values are kept: two different failures, or an `actual` value that changes, are not a repeat. |
 | **Same command** | The same command keeps failing, even though the error changes every time. |
 | **Fake fix** | Claude says "fixed", and the very next run fails the same way. |
 | **Ping-pong** | Claude writes back code it had removed earlier. |
@@ -92,7 +92,7 @@ Settings are saved across sessions.
 
 ```
 claude --plugin-dir ./unstuck      # load it from this folder
-claude plugin test ./unstuck       # 11 tests: detection logic + the band and panes on terminal and desktop
+claude plugin test ./unstuck       # 16 tests: detection logic + the band and panes on terminal and desktop
 claude plugin validate ./unstuck
 ```
 

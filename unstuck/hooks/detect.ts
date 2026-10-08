@@ -32,26 +32,47 @@ export const EMPTY: Tracker = {
   nudged: false,
 }
 
-const ERROR_LINE = /error|fail|exception|cannot|can't|not found|undefined|denied|refused|panic/i
+// The last group is an assertion's values: when they change, Claude is making progress.
+const ERROR_LINE = /error|fail|exception|cannot|can't|not found|undefined|denied|refused|panic|actual|expected|received|!==|===/i
 
+/** A failing test's own line (node, jest, TAP, pytest, go): it names which test failed. */
+const TEST_LINE = /^\s*(?:✖|✗|×|●|not ok\b|FAIL(?:ED)?\b|--- FAIL)/
+const FRAME = /^\s*at\s/
+
+/** The lines that identify a failure: error messages, failing test names, and where it was thrown. */
 const errorLines = (text: string) => {
-  const lines = text.split('\n').filter(line => ERROR_LINE.test(line))
-  return lines.length > 0 ? lines : text.split('\n')
+  const lines = text.split('\n')
+  const kept = lines.filter(line => ERROR_LINE.test(line) || TEST_LINE.test(line))
+  const frame = lines.find(line => FRAME.test(line))
+  if (frame !== undefined && !kept.includes(frame)) kept.push(frame)
+
+  return kept.length > 0 ? kept : lines
 }
 
+/**
+ * What stays the same when the same failure comes back, and differs between two failures.
+ * Dropped: line and column numbers, folders (the file name stays), addresses, timestamps, durations.
+ * Kept: the test name, the file name and the values, so a changing `actual` reads as progress.
+ */
 // ponytail: regex heuristic, swap for per-tool parsers if it misgroups errors
 export const normalize = (text: string) =>
   errorLines(text)
     .join('\n')
-    .replace(/[A-Za-z]:[\\/][^\s:'"()]+|(?:\.{0,2}\/)[^\s:'"()]+/g, '<path>')
+    .replace(/\d{4}-\d\d-\d\dT[\d:.]+Z?|\b\d\d:\d\d:\d\d(?:\.\d+)?\b/g, '<time>')
+    .replace(/(?:[A-Za-z]:)?(?:[\w.@-]*[\\/])+([\w.@-]*[A-Za-z][\w.@-]*)/g, '$1')
+    .replace(/:\d+(?::\d+)?\b/g, ':#')
+    .replace(/\bline \d+/gi, 'line #')
     .replace(/0x[0-9a-f]+/gi, '<hex>')
-    .replace(/\d+/g, '#')
+    .replace(/\d+(?:\.\d+)?\s?(?:ms|s)\b/g, '#ms')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 400)
 
-const excerptOf = (text: string) =>
-  (errorLines(text).find(line => line.trim() && !/^exit code/i.test(line.trim())) ?? '').trim().slice(0, 160)
+const excerptOf = (text: string) => {
+  const lines = errorLines(text).map(line => line.trim())
+
+  return (lines.find(line => /\w(?:Error|Exception)\b/.test(line)) ?? lines.find(line => line && !/^exit code/i.test(line)) ?? '').slice(0, 160)
+}
 
 export const onError = (t: Tracker, text: string, command: string, now: number, usd: number): Tracker => {
   const key = normalize(text)
